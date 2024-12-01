@@ -1,3 +1,5 @@
+using System.Collections;
+using Unity.VisualScripting;
 using UnityEngine;
 
 public class LaserTower : MonoBehaviour, ITower
@@ -9,13 +11,18 @@ public class LaserTower : MonoBehaviour, ITower
     private int maximumRange;
     [SerializeField]
     private int minimumRange;
-    /**
-     * Fire rate is the time between each shot in seconds
-     */
     [SerializeField]
-    private int fireRate;
+    private float energyDepletionRate;
+    [SerializeField]
+    private float energyRegenRate;
+    [SerializeField]
+    private float energyCapacity;
     [SerializeField]
     private int accuracy;
+
+    [Header("Laser Tower References")]
+    [SerializeField]
+    private GameObject laserPrefab;
     
     public IEnemy Target { get; set; }
     public int Damage
@@ -33,60 +40,103 @@ public class LaserTower : MonoBehaviour, ITower
         get => minimumRange;
         set => minimumRange = value;
     }
-    
-    public int FireRate
-    {
-        get => fireRate;
-        set => fireRate = value;
-    }
     public int Accuracy
     {
         get => accuracy;
         set => accuracy = value;
     }
-    
 
-    private float _nextFireTime;
+    public float currentEnergy;
+    private LineRenderer laser;
+    private Coroutine firingCoroutine;
 
     private void Start()
     {
-        _nextFireTime = Time.time;
+        laser = laserPrefab.GetComponent<LineRenderer>();
+        currentEnergy = energyCapacity;
     }
 
     private void Update()
     {
-        FindTarget();
-        
-        if (Time.time < _nextFireTime || Target == null)
+        if (Target == null)
         {
-            return;
+            FindTarget();
         }
 
-        Fire();
-        _nextFireTime = Time.time + FireRate;
+        HandleFiring();
+        RegenerateEnergy();
     }
-    
+
+    private void HandleFiring()
+    {
+        if (Target != null && currentEnergy > 0)
+        {
+            currentEnergy -= Time.deltaTime * energyDepletionRate;
+            firingCoroutine ??= StartCoroutine(FireContinuously());
+        }
+        else
+        {
+            if (firingCoroutine == null)
+            {
+                return;
+            }
+            StopCoroutine(firingCoroutine);
+            laser.enabled = false;
+        }
+    }
+
+    private IEnumerator FireContinuously()
+    {
+        laser.enabled = true;
+        while (currentEnergy > 0)
+        {
+            Fire();
+            yield return new WaitForSeconds(0.1f);
+        }
+        laser.enabled = false;
+    }
+
+    private void RegenerateEnergy()
+    {
+        if (currentEnergy < energyCapacity)
+        {
+            currentEnergy += energyRegenRate * Time.deltaTime;
+        }
+    }
+
     public void FindTarget()
     {
         var enemy = EnemyManager.Instance.GetClosestEnemyInRange(transform.position, maximumRange);
-        
         SetTarget(enemy);
     }
-    
+
     public void SetTarget(IEnemy target)
     {
         Target = target;
+
+        // Subscribe to the new target's OnDeath event
+        if (Target != null)
+        {
+            Target.OnDeath += HandleTargetDeath;
+        }
+    }
+
+    private void HandleTargetDeath(IEnemy enemy)
+    {
+        if (Target == enemy)
+        {
+            // Unsubscribe from the dead target's OnDeath event
+            Target.OnDeath -= HandleTargetDeath;
+            Target = null;
+        }
     }
 
     public void Fire()
     {
-        Debug.Log($"Firing at {Target.Transform.name}");
+        LaserVisuals.SetLaserPositions(laser, transform.position, Target.Transform.position);
         Target?.TakeDamage(Damage);
     }
-    
-    /**
-     * Draw the range of the tower in the editor
-     */
+
     private void OnDrawGizmos()
     {
         Gizmos.color = Color.green;

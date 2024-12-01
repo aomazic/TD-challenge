@@ -12,6 +12,7 @@ public class Slug : MonoBehaviour, IEnemy
         get => health;
         set => health = value;
     }
+    public event System.Action<IEnemy> OnDeath;
     public Transform Transform => transform;
     
     private void OnEnable() {
@@ -33,6 +34,8 @@ public class Slug : MonoBehaviour, IEnemy
     
     public void Die()
     {
+        OnDeath?.Invoke(this);
+        EnemyManager.Instance.UnregisterEnemy(this);
         Destroy(gameObject);
     }
 
