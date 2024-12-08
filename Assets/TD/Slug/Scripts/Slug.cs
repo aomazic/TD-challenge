@@ -5,15 +5,16 @@ public class Slug : MonoBehaviour, IEnemy
     
     [Header("Slug Properties")]
     [SerializeField]
-    private int health;
+    private float health;
 
-    public int Health
+    public float Health
     {
         get => health;
         set => health = value;
     }
     public event System.Action<IEnemy> OnDeath;
     public Transform Transform => transform;
+    public Collider2D Collider => GetComponent<Collider2D>();
     
     private void OnEnable() {
         EnemyManager.Instance.RegisterEnemy(this);
@@ -23,7 +24,7 @@ public class Slug : MonoBehaviour, IEnemy
         EnemyManager.Instance.UnregisterEnemy(this);
     }
     
-    public void TakeDamage(int amount)
+    public void TakeDamage(float amount)
     {
         Health -= amount;
         if (Health <= 0)

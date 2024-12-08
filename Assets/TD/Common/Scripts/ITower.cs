@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public interface ITower
@@ -7,8 +8,10 @@ public interface ITower
     int MinimumRange { get; set; }
     int Accuracy { get; set; }
     IEnemy Target { get; set; }
-    
-    void FindTarget();
+    HashSet<IEnemy> enemiesInMaxRange { get; set; }
+    void NewEnemyDetected(IEnemy enemy);
+    void EnemyOutOfRange(IEnemy enemy);
+    void FindNewTarget();
     void SetTarget(IEnemy target);
     void Fire();
 }

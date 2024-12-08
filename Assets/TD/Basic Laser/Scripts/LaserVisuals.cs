@@ -10,14 +10,15 @@ public static class LaserVisuals
      */
     private const float AboveYOffset = 0.6f;
 
-    public static void SetLaserPositions(LineRenderer lineRenderer, Vector3 tower, Vector3 enemy)
+    public static void SetLaserPositions(LineRenderer lineRenderer, Vector3 tower, Collider2D enemyCollider)
     {
         var firePoint = tower;
-        var direction = GetDirection(tower, enemy);
+        var closestPoint = enemyCollider.ClosestPoint(tower);
+        var direction = GetDirection(tower, closestPoint);
         
         AdjustTowerPosition(ref firePoint, direction);
         lineRenderer.SetPosition(0, firePoint);
-        lineRenderer.SetPosition(1, enemy);
+        lineRenderer.SetPosition(1, closestPoint);
     }
 
     private static Vector2 GetDirection(Vector3 tower, Vector3 enemy)

@@ -1,4 +1,7 @@
+using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 using Unity.VisualScripting;
 using UnityEngine;
 
@@ -24,6 +27,11 @@ public class LaserTower : MonoBehaviour, ITower
     [SerializeField]
     private GameObject laserPrefab;
     
+    [SerializeField]
+    private CircleCollider2D maxRangeCollider;
+    [SerializeField]
+    private CircleCollider2D minRangeCollider;
+    
     public IEnemy Target { get; set; }
     public int Damage
     {
@@ -45,13 +53,18 @@ public class LaserTower : MonoBehaviour, ITower
         get => accuracy;
         set => accuracy = value;
     }
+    public HashSet<IEnemy> enemiesInMaxRange { get; set; } = new HashSet<IEnemy>();
 
     public float currentEnergy;
+    
+    private bool isInCooldown = false; 
     private LineRenderer laser;
     private Coroutine firingCoroutine;
 
     private void Start()
     {
+        maxRangeCollider.radius = maximumRange;
+        minRangeCollider.radius = minimumRange;
         laser = laserPrefab.GetComponent<LineRenderer>();
         currentEnergy = energyCapacity;
     }
@@ -60,15 +73,19 @@ public class LaserTower : MonoBehaviour, ITower
     {
         if (Target == null)
         {
-            FindTarget();
+            FindNewTarget();
         }
-
         HandleFiring();
         RegenerateEnergy();
     }
 
     private void HandleFiring()
     {
+        if (isInCooldown)
+        {
+            return;
+        }
+        
         if (Target != null && currentEnergy > 0)
         {
             currentEnergy -= Time.deltaTime * energyDepletionRate;
@@ -81,7 +98,14 @@ public class LaserTower : MonoBehaviour, ITower
                 return;
             }
             StopCoroutine(firingCoroutine);
+            firingCoroutine = null;
+            
             laser.enabled = false;
+            
+            if (currentEnergy <= 0)
+            {
+                isInCooldown = true;
+            }
         }
     }
 
@@ -91,7 +115,7 @@ public class LaserTower : MonoBehaviour, ITower
         while (currentEnergy > 0)
         {
             Fire();
-            yield return new WaitForSeconds(0.1f);
+            yield return null;
         }
         laser.enabled = false;
     }
@@ -102,13 +126,40 @@ public class LaserTower : MonoBehaviour, ITower
         {
             currentEnergy += energyRegenRate * Time.deltaTime;
         }
+        else if (isInCooldown)
+        {
+            isInCooldown = false;
+        }
     }
 
-    public void FindTarget()
+    public void NewEnemyDetected(IEnemy enemy)
     {
-        var enemy = EnemyManager.Instance.GetClosestEnemyInRange(transform.position, maximumRange);
-        SetTarget(enemy);
+        enemiesInMaxRange.Add(enemy);
+        if (Target == null)
+        {
+            SetTarget(enemy);
+        }
     }
+    
+    public void EnemyOutOfRange(IEnemy enemy)
+    {
+        enemiesInMaxRange.Remove(enemy);
+        if (Target == enemy)
+        {
+            Target = null;
+        }
+    }
+    
+    public void FindNewTarget()
+    {
+        if (enemiesInMaxRange.Count <= 0)
+        {
+            return;
+        }
+
+        SetTarget(enemiesInMaxRange.FirstOrDefault());
+    }
+
 
     public void SetTarget(IEnemy target)
     {
@@ -123,18 +174,20 @@ public class LaserTower : MonoBehaviour, ITower
 
     private void HandleTargetDeath(IEnemy enemy)
     {
-        if (Target == enemy)
+        if (Target != enemy)
         {
-            // Unsubscribe from the dead target's OnDeath event
-            Target.OnDeath -= HandleTargetDeath;
-            Target = null;
+            return;
         }
+        // Unsubscribe from the dead target's OnDeath event
+        Target.OnDeath -= HandleTargetDeath;
+        Target = null;
     }
+    
 
     public void Fire()
     {
-        LaserVisuals.SetLaserPositions(laser, transform.position, Target.Transform.position);
-        Target?.TakeDamage(Damage);
+        LaserVisuals.SetLaserPositions(laser, transform.position, Target.Collider);
+        Target?.TakeDamage(Damage * Time.deltaTime);
     }
 
     private void OnDrawGizmos()
